@@ -1,0 +1,102 @@
+name: .NET Security Analysis and Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  build_and_scan:
+    name: Build, Dependency Scan, and SAST
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Set up JDK 17 for SonarScanner
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: 'zulu'
+
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v4
+        with:
+          path: ~\sonar\cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Cache SonarCloud scanner
+        id: cache-sonar-scanner
+        uses: actions/cache@v4
+        with:
+          path: .\.sonar\scanner
+          key: ${{ runner.os }}-sonar-scanner
+          restore-keys: ${{ runner.os }}-sonar-scanner
+
+      - name: Install SonarCloud scanner (if not cached)
+        if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
+        shell: powershell
+        run: |
+          New-Item -Path .\.sonar\scanner -ItemType Directory -Force
+          dotnet tool update dotnet-sonarscanner --tool-path .\.sonar\scanner
+
+      - name: Restore project dependencies
+        run: dotnet restore ./FileEncryptorApp/FileEncryptorApp.sln
+        working-directory: ${{ github.workspace }}
+
+      - name: Scan for Vulnerable Dependencies and Set Output
+        id: scan_dependencies
+        shell: powershell
+        run: |
+          $vulnerabilities_output = dotnet list ./FileEncryptorApp/FileEncryptorApp.sln package --vulnerable --include-transitive 
+          $vulnerabilities_output | Out-File -FilePath vulnerability_report.txt -Encoding utf8
+          if ($vulnerabilities_output -match "vulnerable") {
+            Write-Host "Vulnerabilities found!"
+            echo "vulnerabilities_found=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          } else {
+            Write-Host "No vulnerabilities found."
+            echo "vulnerabilities_found=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          }
+        working-directory: ${{ github.workspace }}
+        continue-on-error: true
+
+      - name: Upload Vulnerability Scan Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: vulnerability-scan-report
+          path: vulnerability_report.txt
+        if: always()
+
+      - name: Build and analyze with SonarCloud
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}    
+          SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
+        shell: powershell
+        run: |
+          .\.sonar\scanner\dotnet-sonarscanner begin /k:"${{ env.SONAR_PROJECT_KEY }}" /o:"${{ env.SONAR_ORGANIZATION }}" /d:sonar.token="${{ env.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" `
+            ${{ github.event_name == 'pull_request' && format('/d:sonar.pullrequest.key={0} /d:sonar.pullrequest.branch={1} /d:sonar.pullrequest.base={2} /d:sonar.pullrequest.provider=github /d:sonar.pullrequest.github.repository={3}', github.event.pull_request.number, github.head_ref, github.base_ref, github.repository) || '' }}
+          
+          dotnet build ./FileEncryptorApp/FileEncryptorApp.sln --configuration Release --no-restore # Убедитесь, что путь правильный
+          
+          .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
+        working-directory: ${{ github.workspace }}
+
+      - name: Check for Vulnerabilities and Fail Build if Found
+        if: steps.scan_dependencies.outputs.vulnerabilities_found == 'true'
+        shell: powershell
+        run: |
+          Write-Error "Vulnerable dependencies were detected. Check the 'vulnerability-scan-report' artifact and logs."
+          exit 1
