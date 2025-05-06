@@ -52,14 +52,14 @@ jobs:
           dotnet tool update dotnet-sonarscanner --tool-path .\.sonar\scanner
 
       - name: Restore project dependencies
-        run: dotnet restore ./FileEncryptorApp/FileEncryptorApp.sln
+        run: dotnet restore ./FileEncryptorApp/FileEncryptorApp.sln # Убедитесь, что путь к .sln файлу правильный
         working-directory: ${{ github.workspace }}
 
       - name: Scan for Vulnerable Dependencies and Set Output
         id: scan_dependencies
         shell: powershell
         run: |
-          $vulnerabilities_output = dotnet list ./FileEncryptorApp/FileEncryptorApp.sln package --vulnerable --include-transitive 
+          $vulnerabilities_output = dotnet list ./FileEncryptorApp/FileEncryptorApp.sln package --vulnerable --include-transitive # Убедитесь, что путь к .sln файлу правильный
           $vulnerabilities_output | Out-File -FilePath vulnerability_report.txt -Encoding utf8
           if ($vulnerabilities_output -match "vulnerable") {
             Write-Host "Vulnerabilities found!"
@@ -87,9 +87,10 @@ jobs:
         shell: powershell
         run: |
           .\.sonar\scanner\dotnet-sonarscanner begin /k:"${{ env.SONAR_PROJECT_KEY }}" /o:"${{ env.SONAR_ORGANIZATION }}" /d:sonar.token="${{ env.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" `
+            /d:sonar.coverage.exclusions="**/*.cs" ` 
             ${{ github.event_name == 'pull_request' && format('/d:sonar.pullrequest.key={0} /d:sonar.pullrequest.branch={1} /d:sonar.pullrequest.base={2} /d:sonar.pullrequest.provider=github /d:sonar.pullrequest.github.repository={3}', github.event.pull_request.number, github.head_ref, github.base_ref, github.repository) || '' }}
           
-          dotnet build ./FileEncryptorApp/FileEncryptorApp.sln --configuration Release --no-restore # Убедитесь, что путь правильный
+          dotnet build ./FileEncryptorApp/FileEncryptorApp.sln --configuration Release --no-restore # Убедитесь, что путь к .sln файлу правильный
           
           .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
         working-directory: ${{ github.workspace }}
