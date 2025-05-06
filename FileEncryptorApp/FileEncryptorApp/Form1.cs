@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
-using System.IO; // Required for Path, File, FileStream etc.
+using System.IO; 
 using System.Linq;
-using System.Security.Cryptography; // Required for RandomNumberGenerator (alternative) or just Random
+using System.Security.Cryptography; 
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows.Forms; // Required for Form, Button, MessageBox etc.
+using System.Windows.Forms; 
 
 // Namespace unchanged
 namespace FileEncryptorApp
@@ -18,10 +18,10 @@ namespace FileEncryptorApp
     {
         #region Member Variables
 
-        // Variables
-        private string _selectedBackupDestinationPath; 
-        private byte[] _currentSessionKeyMaterial;    
-        private byte[] _currentSessionIVMaterial;     
+        // Variables - теперь nullable, чтобы удовлетворить SonarCloud (CS8618)
+        private string? _selectedBackupDestinationPath; 
+        private byte[]? _currentSessionKeyMaterial;    
+        private byte[]? _currentSessionIVMaterial;     
 
         // Constants for cryptographic parameters
         private const int AES_KEY_SIZE_BYTES = 32; // 256 bits
@@ -40,6 +40,9 @@ namespace FileEncryptorApp
         {
             InitializeComponent();
             InitializeApplicationState();
+            // Инициализируем поля значением по умолчанию, если это возможно, или оставляем nullable
+            // В данном случае, они корректно инициализируются по ходу работы или остаются null,
+            // что проверяется перед использованием. Nullable reference types (?) помогают это отследить.
         }
 
         #endregion
@@ -48,7 +51,6 @@ namespace FileEncryptorApp
 
         private void InitializeApplicationState()
         {
-            // Set initial state, e.g., disable buttons until file/folder selected
             processEncryptButton.Enabled = false;
             processDecryptButton.Enabled = false; 
             UpdateOperationStatus("Ожидание выбора файла и папки резервирования.", Color.DimGray); 
@@ -56,98 +58,92 @@ namespace FileEncryptorApp
 
         #endregion
 
-        #region Event Handlers (Names must match Designer)
+        #region Event Handlers
 
-        /// <summary>
-        /// Handles the click event for the file selection button.
-        /// Prompts the user to select a file via OpenFileDialog.
-        /// </summary>
-        private void btnSelectFile_Click(object sender, EventArgs e) // Original name kept for designer link
+        private void btnSelectFile_Click(object sender, EventArgs e)
         {
             using (OpenFileDialog fileBrowserDialog = new OpenFileDialog())
             {
                 fileBrowserDialog.Title = "Выберите файл для операции";
-                fileBrowserDialog.Filter = "Все файлы (*.*)|*.*"; // Keep original filter
+                fileBrowserDialog.Filter = "Все файлы (*.*)|*.*";
                 fileBrowserDialog.CheckFileExists = true;
                 fileBrowserDialog.CheckPathExists = true;
 
                 if (fileBrowserDialog.ShowDialog(this) == DialogResult.OK)
                 {
-                    // Display selected path in the TextBox (using new control name)
                     filePathDisplayTextBox.Text = fileBrowserDialog.FileName;
                     UpdateOperationStatus("Файл выбран. Укажите папку резервирования и выберите действие.", Color.Black);
-                    ValidateInputsAndUpdateUI(); // Check if other inputs are ready
+                    ValidateInputsAndUpdateUI();
                 }
             }
         }
 
-        /// <summary>
-        /// Handles the click event for the backup folder selection button.
-        /// Prompts the user to select a directory via FolderBrowserDialog.
-        /// </summary>
-        private void btnSelectBackupFolder_Click(object sender, EventArgs e) // Original name kept for designer link
+        private void btnSelectBackupFolder_Click(object sender, EventArgs e)
         {
-            // Use the FolderBrowserDialog placed on the form (using new control name)
-            using (var folderSelector = backupLocationSelectorDialog) // Use instance directly
+            using (var folderSelector = backupLocationSelectorDialog) 
             {
                 folderSelector.Description = "Укажите каталог для сохранения резервных копий";
-                folderSelector.ShowNewFolderButton = true; // Allow creating new folders
+                folderSelector.ShowNewFolderButton = true;
 
                 if (folderSelector.ShowDialog(this) == DialogResult.OK)
                 {
                     _selectedBackupDestinationPath = folderSelector.SelectedPath;
-                    // Provide feedback - using MessageBox as in original
                     MessageBox.Show($"Каталог для резервных копий установлен: {_selectedBackupDestinationPath}",
                                     "Каталог выбран", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     UpdateOperationStatus("Папка резервирования выбрана. Выберите файл и действие.", Color.Black);
-                    ValidateInputsAndUpdateUI(); // Check if other inputs are ready
+                    ValidateInputsAndUpdateUI();
                 }
             }
         }
 
-        /// <summary>
-        /// Handles the click event for the encryption button.
-        /// Performs backup, hashing, and AES encryption.
-        /// </summary>
-        private void btnEncrypt_Click(object sender, EventArgs e) // Original name kept for designer link
+        private void btnEncrypt_Click(object sender, EventArgs e)
         {
-            string fileToProcess = filePathDisplayTextBox.Text; // Use new control name
+            string fileToProcess = filePathDisplayTextBox.Text;
 
-            // --- Input Validation ---
-            if (!ValidatePreOperation(fileToProcess, true)) // True checks for backup folder
+            if (!ValidatePreOperation(fileToProcess, true))
             {
-                return; // Validation failed, messages shown within the method
+                return; 
             }
 
-            // --- Processing Steps ---
+            if (_currentSessionKeyMaterial == null || _currentSessionIVMaterial == null)
+            {
+                 // Эта ветка не должна выполниться, если GenerateCryptoMaterials работает корректно
+                 UpdateOperationStatus("Ошибка: Не удалось сгенерировать криптографические материалы.", Color.Red);
+                 return;
+            }
+
+
             try
             {
                 UpdateOperationStatus("Выполняется резервное копирование...", Color.Blue);
-                if (!PerformBackup(fileToProcess)) return; // Backup failed
+                if (!PerformBackup(fileToProcess)) return;
 
                 UpdateOperationStatus("Вычисляется хэш...", Color.Blue);
-                string sourceFileHash = HashUtility.ComputeSHA512(fileToProcess);
+                string? sourceFileHash = HashUtility.ComputeSHA512(fileToProcess); // string? так как метод может вернуть null
                 if (sourceFileHash == null)
                 {
                     UpdateOperationStatus("Ошибка: Не удалось вычислить хэш исходного файла.", Color.Red);
-                    // Consider if backup should be deleted here
                     return;
                 }
 
                 UpdateOperationStatus("Сохраняется хэш...", Color.Blue);
-                if (!SaveHashToFile(fileToProcess, sourceFileHash)) return; // Hash saving failed
+                if (!SaveHashToFile(fileToProcess, sourceFileHash)) return;
 
                 UpdateOperationStatus("Генерация ключей...", Color.Blue);
-                GenerateCryptoMaterials(); // Generate Key and IV
+                GenerateCryptoMaterials(); // Гарантированно инициализирует _currentSessionKeyMaterial и _currentSessionIVMaterial
+
+                // Повторная проверка после GenerateCryptoMaterials (для полноты, хотя и избыточно)
+                if (_currentSessionKeyMaterial == null || _currentSessionIVMaterial == null) {
+                    UpdateOperationStatus("Критическая ошибка: Ключи не были сгенерированы.", Color.Red);
+                    return;
+                }
+
 
                 UpdateOperationStatus("Выполняется шифрование...", Color.DarkCyan);
                 string encryptedOutputPath = Path.ChangeExtension(fileToProcess, ENCRYPTED_FILE_EXTENSION);
                 AesEncryption.EncryptFile(fileToProcess, encryptedOutputPath, _currentSessionKeyMaterial, _currentSessionIVMaterial);
 
-                // --- Completion ---
                 UpdateOperationStatus($"Шифрование успешно завершено. Результат: {encryptedOutputPath}", Color.Green);
-                // Optionally update textbox to show the encrypted file path
-                // filePathDisplayTextBox.Text = encryptedOutputPath; 
             }
             catch (Exception ex)
             {
@@ -155,19 +151,16 @@ namespace FileEncryptorApp
             }
         }
 
-        /// <summary>
-        /// Handles the click event for the decryption button.
-        /// Performs AES decryption and hash verification.
-        /// </summary>
-        private void btnDecrypt_Click(object sender, EventArgs e) // Original name kept for designer link
+        private void btnDecrypt_Click(object sender, EventArgs e)
         {
-            string fileToProcess = filePathDisplayTextBox.Text; // Use new control name
+            string fileToProcess = filePathDisplayTextBox.Text;
 
-            // --- Input Validation ---
-            if (!ValidatePreOperation(fileToProcess, false)) // False: don't check backup folder for decryption
+            if (!ValidatePreOperation(fileToProcess, false)) 
             {
                 return;
             }
+
+            // Явная проверка на null для _currentSessionKeyMaterial и _currentSessionIVMaterial
             if (_currentSessionKeyMaterial == null || _currentSessionIVMaterial == null)
             {
                 MessageBox.Show("Ошибка: Материалы для дешифрования (ключ/IV) отсутствуют.\nДешифрование возможно только в той же сессии, где было выполнено шифрование.",
@@ -176,7 +169,6 @@ namespace FileEncryptorApp
                 return;
             }
 
-            // --- Processing Steps ---
             try
             {
                 UpdateOperationStatus("Выполняется дешифрование...", Color.DarkCyan);
@@ -185,11 +177,8 @@ namespace FileEncryptorApp
 
                 UpdateOperationStatus("Дешифрование завершено. Проверка целостности...", Color.Blue);
                 VerifyDecryptedFileIntegrity(fileToProcess, decryptedOutputPath);
-
-                // Optionally update textbox to show the decrypted file path
-                // filePathDisplayTextBox.Text = decryptedOutputPath;
             }
-            catch (CryptographicException cryptoEx) // Catch specific crypto errors (bad key, padding, etc.)
+            catch (CryptographicException cryptoEx)
             {
                 HandleOperationError("дешифрования (криптография)", cryptoEx);
                 UpdateOperationStatus("Критическая ошибка дешифрования! Возможно, неверный ключ или файл поврежден.", Color.Red);
@@ -200,57 +189,27 @@ namespace FileEncryptorApp
             }
         }
 
-
-        /// <summary>
-        /// Placeholder for the label click event handler, as present in the original code.
-        /// Can be removed if the label is not intended to be interactive.
-        /// </summary>
-        private void label1_Click(object sender, EventArgs e) // Original name kept for designer link
-        {
-            // This handler was empty in the original code.
-            // Add functionality here if the status label should be clickable.
-            // For instance, copy status text to clipboard:
-            // if (!string.IsNullOrEmpty(operationStatusLabel.Text))
-            // {
-            //     Clipboard.SetText(operationStatusLabel.Text);
-            //     MessageBox.Show("Статус скопирован в буфер обмена.");
-            // }
-        }
-
-
         #endregion
 
         #region Private Helper Methods
 
-        /// <summary>
-        /// Updates the status label text and color.
-        /// Ensures thread safety if called from a different thread (though unlikely in this simple app).
-        /// </summary>
         private void UpdateOperationStatus(string message, Color statusColor)
         {
-            // Check InvokeRequired on the PARENT control (StatusStrip), not the label itself
             if (mainStatusStrip.InvokeRequired)
             {
-                // Invoke on the PARENT control (StatusStrip)
                 mainStatusStrip.Invoke(new Action(() =>
                 {
-                    // Inside the invoked action, we can safely update the label properties
                     operationStatusLabel.Text = $"Статус: {message}";
-                    operationStatusLabel.ForeColor = statusColor; // Setting ForeColor on ToolStripStatusLabel might be affected by themes/renderers
+                    operationStatusLabel.ForeColor = statusColor;
                 }));
             }
             else
             {
-                // Already on the UI thread, update directly
                 operationStatusLabel.Text = $"Статус: {message}";
                 operationStatusLabel.ForeColor = statusColor;
             }
         }
 
-        /// <summary>
-        /// Validates required inputs (file path, backup folder if needed) before starting an operation.
-        /// </summary>
-        /// <returns>True if inputs are valid, False otherwise.</returns>
         private bool ValidatePreOperation(string filePath, bool checkBackupFolder)
         {
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -262,6 +221,7 @@ namespace FileEncryptorApp
 
             if (checkBackupFolder)
             {
+                 // Проверка на null для _selectedBackupDestinationPath
                 if (string.IsNullOrWhiteSpace(_selectedBackupDestinationPath) || !Directory.Exists(_selectedBackupDestinationPath))
                 {
                     MessageBox.Show("Ошибка: Укажите существующий каталог для резервного копирования.", "Неверный каталог", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -272,33 +232,27 @@ namespace FileEncryptorApp
             return true;
         }
 
-        /// <summary>
-        /// Enables or disables operation buttons based on whether required inputs are present.
-        /// </summary>
         private void ValidateInputsAndUpdateUI()
         {
             bool fileSelected = !string.IsNullOrWhiteSpace(filePathDisplayTextBox.Text) && File.Exists(filePathDisplayTextBox.Text);
+            // Добавлена проверка на null для _selectedBackupDestinationPath
             bool backupFolderSelected = !string.IsNullOrWhiteSpace(_selectedBackupDestinationPath) && Directory.Exists(_selectedBackupDestinationPath);
 
-            // Enable Encrypt only if both file and backup folder are selected
             processEncryptButton.Enabled = fileSelected && backupFolderSelected;
-
-            // Enable Decrypt only if a file is selected (key/IV check happens later)
             processDecryptButton.Enabled = fileSelected;
         }
 
-
-        /// <summary>
-        /// Creates a backup copy of the source file in the designated backup location.
-        /// </summary>
-        /// <returns>True if backup was successful, False otherwise.</returns>
         private bool PerformBackup(string sourceFilePath)
         {
+            if (_selectedBackupDestinationPath == null) {
+                 UpdateOperationStatus("Критическая ошибка: Путь для резервного копирования не установлен.", Color.Red);
+                 return false;
+            }
             try
             {
                 string backupFileName = Path.GetFileName(sourceFilePath);
-                string backupFullPath = Path.Combine(_selectedBackupDestinationPath, backupFileName);
-                File.Copy(sourceFilePath, backupFullPath, true); // Allow overwrite as in original
+                string backupFullPath = Path.Combine(_selectedBackupDestinationPath, backupFileName); // _selectedBackupDestinationPath! если уверены, что не null
+                File.Copy(sourceFilePath, backupFullPath, true); 
                 UpdateOperationStatus($"Резервная копия создана: {backupFullPath}", Color.DarkBlue);
                 return true;
             }
@@ -311,10 +265,6 @@ namespace FileEncryptorApp
             }
         }
 
-        /// <summary>
-        /// Saves the calculated hash value to a file with the .hash extension.
-        /// </summary>
-        /// <returns>True if saving was successful, False otherwise.</returns>
         private bool SaveHashToFile(string originalFilePath, string hashValue)
         {
             try
@@ -333,34 +283,21 @@ namespace FileEncryptorApp
             }
         }
 
-        /// <summary>
-        /// Generates random Key and IV using the (insecure) Random class, matching original behavior.
-        /// Stores them in the member variables _currentSessionKeyMaterial and _currentSessionIVMaterial.
-        /// </summary>
         private void GenerateCryptoMaterials()
         {
             _currentSessionKeyMaterial = new byte[AES_KEY_SIZE_BYTES];
             _currentSessionIVMaterial = new byte[AES_IV_SIZE_BYTES];
 
-            // *** WARNING: Using System.Random is NOT cryptographically secure! ***
-            // Kept here to match the original code's functionality exactly.
-            // For real applications, use System.Security.Cryptography.RandomNumberGenerator:
-            // using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
-            // {
-            //     rng.GetBytes(_currentSessionKeyMaterial);
-            //     rng.GetBytes(_currentSessionIVMaterial);
-            // }
-            Random nonCryptoRandom = new Random(); // Matches original
-            nonCryptoRandom.NextBytes(_currentSessionKeyMaterial);
-            nonCryptoRandom.NextBytes(_currentSessionIVMaterial);
+            // Используем криптографически стойкий генератор случайных чисел
+            using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(_currentSessionKeyMaterial);
+                rng.GetBytes(_currentSessionIVMaterial);
+            }
 
-            UpdateOperationStatus("Ключ и IV сессии сгенерированы.", Color.Blue);
+            UpdateOperationStatus("Ключ и IV сессии сгенерированы (безопасно).", Color.Blue);
         }
 
-        /// <summary>
-        /// Verifies the integrity of the decrypted file by comparing its hash
-        /// with the hash stored in the corresponding .hash file.
-        /// </summary>
         private void VerifyDecryptedFileIntegrity(string originalEncryptedPath, string decryptedFilePath)
         {
             string expectedHashFilePath = Path.ChangeExtension(originalEncryptedPath, HASH_FILE_EXTENSION);
@@ -374,13 +311,12 @@ namespace FileEncryptorApp
             try
             {
                 string expectedHash = File.ReadAllText(expectedHashFilePath);
-                string actualHash = HashUtility.ComputeSHA512(decryptedFilePath);
+                string? actualHash = HashUtility.ComputeSHA512(decryptedFilePath); // string?
 
                 if (actualHash == null)
                 {
                     UpdateOperationStatus("Дешифровано, но не удалось вычислить хэш для проверки целостности.", Color.OrangeRed);
                 }
-                // Perform case-insensitive comparison as hash is stored lowercase
                 else if (string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
                 {
                     UpdateOperationStatus("Файл успешно дешифрован. Целостность данных подтверждена.", Color.Green);
@@ -398,20 +334,12 @@ namespace FileEncryptorApp
             }
         }
 
-
-        /// <summary>
-        /// Centralized error handler for major operations.
-        /// </summary>
         private void HandleOperationError(string operationName, Exception exceptionInfo)
         {
             string errorMessage = $"Критическая ошибка во время операции '{operationName}':\n{exceptionInfo.Message}\n\nПодробности: {exceptionInfo.StackTrace}";
             MessageBox.Show(errorMessage, $"Ошибка {operationName}", MessageBoxButtons.OK, MessageBoxIcon.Error);
             UpdateOperationStatus($"Ошибка во время операции '{operationName}'. См. детали.", Color.Red);
-            // Consider logging the full exceptionInfo here
         }
-
-
         #endregion
-
-    } // End of Form1 class
-} // End of namespace
+    }
+}
