@@ -9,7 +9,6 @@
 | **CI Сборка & Анализ (.NET)**            | [![.NET Security Analysis and Build](https://github.com/Charlottka314/vkr_devsecops/actions/workflows/security_analysis.yml/badge.svg)](https://github.com/Charlottka314/vkr_devsecops/actions/workflows/security_analysis.yml) |
 | **Качество Кода (SonarCloud)**           | [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=Charlottka314_vkr_devsecops&metric=alert_status)](https://sonarcloud.io/summary/overall?id=Charlottka314_vkr_devsecops) |
 | **Уязвимости (SonarCloud)**            | [![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=Charlottka314_vkr_devsecops&metric=vulnerabilities)](https://sonarcloud.io/summary/overall?id=Charlottka314_vkr_devsecops) |
-| **Покрытие Кода (SonarCloud)**         | [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=Charlottka314_vkr_devsecops&metric=coverage)](https://sonarcloud.io/summary/overall?id=Charlottka314_vkr_devsecops) |
 | **Технический Долг (SonarCloud)**      | [![Technical Debt](https://sonarcloud.io/api/project_badges/measure?project=Charlottka314_vkr_devsecops&metric=sqale_rating)](https://sonarcloud.io/summary/overall?id=Charlottka314_vkr_devsecops) |
 | **Дублирование Кода (SonarCloud)**     | [![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=Charlottka314_vkr_devsecops&metric=duplicated_lines_density)](https://sonarcloud.io/summary/overall?id=Charlottka314_vkr_devsecops) |
 
@@ -60,7 +59,7 @@
 
 Для взаимодействия с SonarCloud рабочий процесс использует следующие секреты, которые настроены в данном репозитории GitHub (`Settings > Secrets and variables > Actions > Repository secrets`):
 
-*   `SONAR_TOKEN`: Персональный токен доступа к SonarCloud. В данном проекте используется токен, сгенерированный пользователем `Charlottka314` для этого репозитория. Пример значения (не актуальный): `aac1e35dd6bf12635e1e2dbaa7bd502acbb232ad`. Актуальный токен хранится в секретах.
+*   `SONAR_TOKEN`: Персональный токен доступа к SonarCloud. В данном проекте используется токен, сгенерированный пользователем `Charlottka314` для этого репозитория. Пример значения (не актуальный): `aac1e356bf12635e1e2dbaa7bd502acbb232ad`. Актуальный токен хранится в секретах.
 *   `SONAR_PROJECT_KEY`: Уникальный ключ проекта на SonarCloud, для данного проекта это `Charlottka314_vkr_devsecops`.
 *   `SONAR_ORGANIZATION`: Имя организации на SonarCloud, для данного проекта это `charlottka314`.
 
