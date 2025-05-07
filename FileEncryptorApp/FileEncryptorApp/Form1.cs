@@ -105,6 +105,10 @@ namespace FileEncryptorApp
                 return; 
             }
 
+            UpdateOperationStatus("Генерация ключей...", Color.Blue);
+            GenerateCryptoMaterials(); // Гарантированно инициализирует _currentSessionKeyMaterial и _currentSessionIVMaterial
+
+
             if (_currentSessionKeyMaterial == null || _currentSessionIVMaterial == null)
             {
                  // Эта ветка не должна выполниться, если GenerateCryptoMaterials работает корректно
@@ -128,9 +132,6 @@ namespace FileEncryptorApp
 
                 UpdateOperationStatus("Сохраняется хэш...", Color.Blue);
                 if (!SaveHashToFile(fileToProcess, sourceFileHash)) return;
-
-                UpdateOperationStatus("Генерация ключей...", Color.Blue);
-                GenerateCryptoMaterials(); // Гарантированно инициализирует _currentSessionKeyMaterial и _currentSessionIVMaterial
 
                 // Повторная проверка после GenerateCryptoMaterials (для полноты, хотя и избыточно)
                 if (_currentSessionKeyMaterial == null || _currentSessionIVMaterial == null) {
